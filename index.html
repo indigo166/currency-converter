@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Converter">
+  <meta name="theme-color" content="#0e1419">
+  <meta name="description" content="Calculator that converts while you compute — USD, JPY, COP and 29 more.">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <title>Currency Converter</title>
+</head>
+<body>
+  <div id="app">
+    <header id="topbar"></header>
+    <main id="view"></main>
+    <section id="pad" aria-label="Keypad"></section>
+    <nav id="tabs"></nav>
+  </div>
+  <div id="chart" class="overlay" hidden></div>
+  <div id="sheet" class="sheet-wrap" hidden></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
