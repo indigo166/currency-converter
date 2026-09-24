@@ -15,10 +15,17 @@
 (function (root) {
   'use strict';
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.1.1';
 
   /** Newest first. Notes are written for the person using the app, not for the code. */
   const RELEASES = [
+    {
+      version: '1.1.1',
+      date: '2026-09-23',
+      notes: [
+        'Fixed: an update could load half-old, half-new for up to 10 minutes after it was published. Every file is now tied to the version it belongs to.',
+      ],
+    },
     {
       version: '1.1.0',
       date: '2026-09-23',

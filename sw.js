@@ -10,9 +10,10 @@
  */
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE = 'cc-v' + VERSION;
+const V = '?v=' + encodeURIComponent(VERSION);
 const SHELL = [
-  './', 'index.html', 'styles.css', 'version.js', 'core.js', 'app.js', 'manifest.webmanifest',
-  'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
+  './', 'index.html', 'version.js', 'styles.css' + V, 'core.js' + V, 'app.js' + V,
+  'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
 self.addEventListener('install', (e) => {
@@ -36,8 +37,11 @@ self.addEventListener('fetch', (e) => {
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
+      // no-cache: revalidate with the server every time rather than trusting the
+      // browser's HTTP cache (GitHub Pages sends max-age=600). A 304 costs almost nothing.
+      // A fresh Request, because a navigation request can't be re-fetched with options.
       const res = await Promise.race([
-        fetch(e.request),
+        fetch(new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
       ]);
       if (res.ok) cache.put(e.request, res.clone());

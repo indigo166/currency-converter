@@ -35,3 +35,13 @@ test('no other file hardcodes a version number', () => {
     assert.equal(hit, null, `${f} hardcodes "${hit && hit[0]}" — versions live only in version.js`);
   }
 });
+
+// Every file the page loads (other than version.js itself) must carry the version on its
+// URL, or a stale copy can be mixed into a new release — as happened on the 1.1.0 deploy.
+test('index.html loads app files only with the version on the URL', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  for (const f of ['app.js', 'core.js', 'styles.css']) {
+    assert.ok(!new RegExp(`(src|href)="${f.replace('.', '\\.')}"`).test(html), `${f} is loaded without ?v=`);
+    assert.ok(html.includes(`${f}?v=`), `${f} is not loaded with ?v=`);
+  }
+});

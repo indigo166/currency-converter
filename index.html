@@ -12,7 +12,12 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css">
+  <script src="version.js"></script>
+  <!-- Every other file is requested with the version on its URL. A release then asks for
+       addresses no cache has ever seen, so a stale copy of one file can't be mixed into a
+       new version — which is exactly what happened on the first 1.1.0 deploy (fresh
+       version file, 10-minute-old app.js from the browser's HTTP cache). -->
+  <script>document.write('<link rel="stylesheet" href="styles.css?v=' + encodeURIComponent(AppVersion.VERSION) + '">');</script>
   <title>Currency Converter</title>
 </head>
 <body>
@@ -25,8 +30,9 @@
   <div id="chart" class="overlay" hidden></div>
   <div id="sheet" class="sheet-wrap" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>
-  <script src="version.js"></script>
-  <script src="core.js"></script>
-  <script src="app.js"></script>
+  <script>
+    var v = encodeURIComponent(AppVersion.VERSION);
+    document.write('<script src="core.js?v=' + v + '"><\/script><script src="app.js?v=' + v + '"><\/script>');
+  </script>
 </body>
 </html>
