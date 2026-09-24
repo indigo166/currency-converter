@@ -54,6 +54,7 @@
     refreshing: false,
     chart: null,
     sheet: null,
+    updateReady: null, // a newer version number waiting to be loaded
     scrollTapeToEnd: true,
   };
 
@@ -557,7 +558,13 @@
   function renderTabs() {
     const t = (key, icon, label) =>
       `<button class="tab ${S.tab === key ? 'on' : ''}" data-action="tab" data-tab="${key}"><span class="ic">${icon}</span>${label}</button>`;
-    $('#tabs').innerHTML = t('currency', I.currency, 'Currency') + t('calc', I.calc, 'Calculator') + t('units', I.ruler, 'Units');
+    // The version line sits in the strip above the iPhone's home bar, which is otherwise
+    // dead space — so showing it costs the keypad nothing. Tap to reload, or to take an
+    // update that's waiting.
+    const build = S.updateReady
+      ? `<button class="build ready" data-action="refresh-app">Version ${S.updateReady} is ready · tap to update</button>`
+      : `<button class="build" data-action="refresh-app">Version ${VERSION} · tap to refresh</button>`;
+    $('#tabs').innerHTML = t('currency', I.currency, 'Currency') + t('calc', I.calc, 'Calculator') + t('units', I.ruler, 'Units') + build;
   }
 
   function render() {
@@ -591,7 +598,7 @@
       const fmtDate = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const rel = RELEASES.map((r) => `
         <div class="rel">
-          <div class="rel-head"><b>v${esc(r.version)}</b>${r.version === VERSION ? '<span class="now">this version</span>' : ''}<span class="muted">${fmtDate(r.date)}</span></div>
+          <div class="rel-head"><b>Version ${esc(r.version)}</b>${r.version === VERSION ? '<span class="now">this version</span>' : ''}<span class="muted">${fmtDate(r.date)}</span></div>
           <ul>${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
         </div>`).join('');
       const rates = S.rates
@@ -808,6 +815,7 @@
     'open-pair'() { openSheet('pair'); },
     'open-history'() { openSheet('history'); },
     'open-about'() { openSheet('about'); },
+    'refresh-app'() { location.reload(); },
     'open-chart'() { openChart(); },
     'dismiss-install'() { store.set('installHintDismissed', true); renderView(); },
     pin() {
@@ -977,16 +985,41 @@
   });
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    // When an update's worker takes over, reload once so the new version shows now rather
-    // than on the next launch. Only for updates — a first install has no prior controller.
-    if (navigator.serviceWorker.controller) {
-      let reloaded = false;
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!reloaded) { reloaded = true; location.reload(); }
-      });
-    }
-    navigator.serviceWorker.register('sw.js?v=' + encodeURIComponent(VERSION)).catch(() => { /* offline shell unavailable */ });
+    navigator.serviceWorker.register('sw.js?v=' + encodeURIComponent(VERSION), { updateViaCache: 'none' })
+      .catch(() => { /* offline shell unavailable */ });
   }
+
+  /**
+   * iPhone resumes a home-screen app rather than reloading it, so a new version would only
+   * arrive after a full close-and-reopen. On every return to the app, ask the server what
+   * the current version is. (The service worker's own update check can't do this: its
+   * script is identical across releases — the version reaches it on the URL — so the
+   * browser never sees a change.)
+   *
+   * If nothing is in progress, reload straight into the new version. If a calculation is
+   * half-typed or a screen is open, don't throw that away: flag it on the version line and
+   * let the reload happen on a tap.
+   */
+  async function checkForUpdate() {
+    if (location.protocol !== 'https:') return;
+    try {
+      const r = await fetch('version.js', { cache: 'no-store' });
+      const m = (await r.text()).match(/const VERSION = (\d+);/);
+      const latest = m ? Number(m[1]) : null;
+      if (!latest || latest <= VERSION) return;
+      const idle = !S.cur.text && !S.calc.text && !S.sheet && !S.chart;
+      if (idle) { location.reload(); return; }
+      if (S.updateReady !== latest) {
+        S.updateReady = latest;
+        renderTabs();
+        sizePad();
+        toast(`Version ${latest} is ready — tap the bottom line to update`, 3500);
+      }
+    } catch (_) { /* offline — try again next time */ }
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
 
   render();
   refreshRates(false);
@@ -995,13 +1028,13 @@
   // An install from before versions were recorded has no seenVersion but does have
   // rates cached — that's an update too, not a first launch.
   const seen = store.get('seenVersion', null);
-  const updated = seen ? seen !== VERSION : store.get('rates', null) != null;
+  const updated = seen ? String(seen) !== String(VERSION) : store.get('rates', null) != null;
   // Marked as seen only once the notice has been on screen for its full time. An update
   // reloads the page once when the new service worker takes over; recording it at start-up
   // meant that reload swallowed the notice and the next load thought it had been shown.
   if (updated) {
     setTimeout(() => {
-      toast(`Updated to v${VERSION} — tap ⓘ for what's new`, 4000);
+      toast(`Updated to version ${VERSION} — tap ⓘ for what's new`, 4000);
       setTimeout(() => store.set('seenVersion', VERSION), 4000);
     }, 800);
   } else {

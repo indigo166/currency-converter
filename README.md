@@ -49,17 +49,18 @@ All sources are keyless and send CORS headers, so there's no server.
 
 ## Releasing
 
-Every change that reaches the phone is a new version. The number and the notes live in
-**`version.js` and nowhere else** — the About screen (ⓘ), the "Updated to v…" notice and the
-service worker's cache all read from it.
+Every change that reaches the phone is the next version number: Version 6, Version 7 …
+(a single counting number, like Better Translator). It's written **only in `version.js`**,
+with plain-English notes per release, and shows at the bottom of the app, on the ⓘ screen
+and in the "Updated to" notice.
 
-1. In `version.js`: bump `VERSION` (fix → last number, feature → middle number) and add an
-   entry at the top of `RELEASES` with today's date and notes written for the person using it.
-2. `node --test` — fails if the newest entry doesn't match `VERSION`, if notes are missing, or
-   if a version number has been hardcoded anywhere else.
-3. `git commit -am "…" && git push` — GitHub Pages redeploys in about a minute (its CDN can
-   hold the old files for up to 10 more).
+1. In `version.js`: `VERSION` + 1, and add an entry at the top of `RELEASES` with today's
+   date and notes written for the person using the app.
+2. `node --test` — fails if the numbers skip or repeat, if notes are missing, if a version is
+   hardcoded anywhere else, or if a file is loaded without its `?v=`.
+3. `git commit -am "…" && git push` — GitHub Pages redeploys in about a minute.
 
-On the phone the update lands on the next open: the service worker fetches fresh files when
-online, the page reloads itself once when the new worker takes over, and the app says
-"Updated to vX" the first time it runs.
+On the phone: opening the app fresh loads the new version immediately. Switching back to
+an app that was already running checks for a newer version; if nothing is half-typed it
+reloads straight into it, otherwise the bottom line turns blue ("Version 7 is ready · tap to
+update") and waits for a tap.

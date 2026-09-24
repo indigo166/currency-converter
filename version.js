@@ -2,56 +2,58 @@
  * version.js — the app's version and what changed in each release. The ONLY place a
  * version number is written.
  *
- * Everything else reads from here: the About screen, the "Updated to vX" notice, and the
- * service worker (which receives the version through its registration URL, so its cache
- * name can't drift from the app's). A test fails if the newest release entry doesn't
- * match VERSION — so a version bump without notes can't ship.
+ * The version is a single counting number, same as Better Translator: every update the
+ * phone receives is the next number up — Version 6, Version 7 — never skipping, never a
+ * dotted 1.2.3. It shows at the bottom of the app, on the ⓘ screen, in the "Updated to"
+ * notice, and in the service worker's cache name (which receives it through its
+ * registration URL, so nothing else needs bumping). Tests fail a release if the newest
+ * entry isn't VERSION, if the numbers skip or repeat, or if a note is missing.
  *
- * Numbering: small fixes bump the last number (1.1.0 → 1.1.1), new features bump the
- * middle one (1.1.x → 1.2.0).
- *
- * To release: bump VERSION, add an entry at the TOP of RELEASES, run `node --test`, push.
+ * To release: VERSION + 1, add an entry at the TOP of RELEASES, `node --test`, push.
  */
 (function (root) {
   'use strict';
 
-  const VERSION = '1.1.2';
+  const VERSION = 6;
 
   /** Newest first. Notes are written for the person using the app, not for the code. */
   const RELEASES = [
     {
-      version: '1.1.2',
+      version: 6,
       date: '2026-09-23',
       notes: [
-        'Fixed: the "Updated to v…" notice could be skipped when the app reloaded itself to finish an update.',
+        'Version number at the bottom of the screen. It goes up by one with every update.',
+        'Updates arrive when you switch back to the app, not only after a full restart. If you\'re in the middle of a calculation it asks before reloading.',
       ],
     },
     {
-      version: '1.1.1',
+      version: 5,
+      date: '2026-09-23',
+      notes: ['Fixed: the "Updated to…" notice could be skipped when the app reloaded itself to finish an update.'],
+    },
+    {
+      version: 4,
+      date: '2026-09-23',
+      notes: ['Fixed: an update could load half-old, half-new for up to 10 minutes after it was published.'],
+    },
+    {
+      version: 3,
       date: '2026-09-23',
       notes: [
-        'Fixed: an update could load half-old, half-new for up to 10 minutes after it was published. Every file is now tied to the version it belongs to.',
+        'The ⓘ screen: version and what changed in each update.',
+        'After an update the app tells you once, so you know it arrived.',
       ],
     },
     {
-      version: '1.1.0',
-      date: '2026-09-23',
-      notes: [
-        'This screen: tap ⓘ on any tab to see the version and what changed.',
-        'After an update the app tells you once — "Updated to v…" — so you know it arrived.',
-      ],
-    },
-    {
-      version: '1.0.1',
+      version: 2,
       date: '2026-09-23',
       notes: [
         'Bigger keys: the keypad now fills the screen instead of leaving empty space above it.',
         'Pins are more compact, and the display shrinks before the keys do when space is tight.',
-        'Updates show up the next time you open the app.',
       ],
     },
     {
-      version: '1.0.0',
+      version: 1,
       date: '2026-09-23',
       notes: [
         'First iPhone version, ported from the Android app.',
