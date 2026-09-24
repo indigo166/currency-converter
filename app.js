@@ -297,6 +297,11 @@
     } else {
       html = '<div class="title">Units</div><div class="spacer"></div>';
     }
+    // The version sits beside ⓘ on every tab. It turns blue with a ↻ when a newer version
+    // is waiting — tap it to load. No pop-ups either way: Julian asked for none.
+    html += S.updateReady
+      ? `<button class="ver ready" data-action="refresh-app" aria-label="Load version ${S.updateReady}">v${S.updateReady} ↻</button>`
+      : `<button class="ver" data-action="open-about" aria-label="Version ${VERSION}, what's new">v${VERSION}</button>`;
     html += `<button class="icon-btn" data-action="open-about" aria-label="Version and what's new">${I.info}</button>`;
     $('#topbar').innerHTML = html;
     if (S.tab === 'currency') {
@@ -558,13 +563,7 @@
   function renderTabs() {
     const t = (key, icon, label) =>
       `<button class="tab ${S.tab === key ? 'on' : ''}" data-action="tab" data-tab="${key}"><span class="ic">${icon}</span>${label}</button>`;
-    // The version line sits in the strip above the iPhone's home bar, which is otherwise
-    // dead space — so showing it costs the keypad nothing. Tap to reload, or to take an
-    // update that's waiting.
-    const build = S.updateReady
-      ? `<button class="build ready" data-action="refresh-app">Version ${S.updateReady} is ready · tap to update</button>`
-      : `<button class="build" data-action="refresh-app">Version ${VERSION} · tap to refresh</button>`;
-    $('#tabs').innerHTML = t('currency', I.currency, 'Currency') + t('calc', I.calc, 'Calculator') + t('units', I.ruler, 'Units') + build;
+    $('#tabs').innerHTML = t('currency', I.currency, 'Currency') + t('calc', I.calc, 'Calculator') + t('units', I.ruler, 'Units');
   }
 
   function render() {
@@ -618,7 +617,12 @@
       body = `<h2>History ${S.history.length ? '<button class="text-btn" data-action="history-clear">Clear</button>' : ''}</h2>
         ${items || '<div class="empty">Every = you press lands here.</div>'}`;
     }
-    w.innerHTML = `<div class="sheet" role="dialog"><div class="grab"></div>${body}</div>`;
+    // An explicit ✕ on every sheet. Dismissing used to rely on tapping the dimmed backdrop,
+    // and iPhone Safari doesn't deliver taps on a plain element to a document-level
+    // listener — so on the phone the ⓘ screen could be opened but never closed.
+    w.innerHTML = `<div class="sheet" role="dialog">
+      <button class="sheet-close" data-action="close-sheet" aria-label="Close">${I.close}</button>
+      <div class="grab" data-action="close-sheet"></div>${body}</div>`;
     w.hidden = false;
   }
 
@@ -816,6 +820,7 @@
     'open-history'() { openSheet('history'); },
     'open-about'() { openSheet('about'); },
     'refresh-app'() { location.reload(); },
+    'close-sheet'() { closeSheet(); },
     'open-chart'() { openChart(); },
     'dismiss-install'() { store.set('installHintDismissed', true); renderView(); },
     pin() {
@@ -1011,9 +1016,7 @@
       if (idle) { location.reload(); return; }
       if (S.updateReady !== latest) {
         S.updateReady = latest;
-        renderTabs();
-        sizePad();
-        toast(`Version ${latest} is ready — tap the bottom line to update`, 3500);
+        renderTop();
       }
     } catch (_) { /* offline — try again next time */ }
   }
@@ -1024,20 +1027,4 @@
   render();
   refreshRates(false);
 
-  // Say so once when a new version arrives, so it's clear the phone got the update.
-  // An install from before versions were recorded has no seenVersion but does have
-  // rates cached — that's an update too, not a first launch.
-  const seen = store.get('seenVersion', null);
-  const updated = seen ? String(seen) !== String(VERSION) : store.get('rates', null) != null;
-  // Marked as seen only once the notice has been on screen for its full time. An update
-  // reloads the page once when the new service worker takes over; recording it at start-up
-  // meant that reload swallowed the notice and the next load thought it had been shown.
-  if (updated) {
-    setTimeout(() => {
-      toast(`Updated to version ${VERSION} — tap ⓘ for what's new`, 4000);
-      setTimeout(() => store.set('seenVersion', VERSION), 4000);
-    }, 800);
-  } else {
-    store.set('seenVersion', VERSION);
-  }
 })();

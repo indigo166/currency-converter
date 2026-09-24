@@ -14,10 +14,19 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 6;
+  const VERSION = 7;
 
   /** Newest first. Notes are written for the person using the app, not for the code. */
   const RELEASES = [
+    {
+      version: 7,
+      date: '2026-09-23',
+      notes: [
+        'The version number now sits at the top, beside ⓘ. It turns blue when an update is waiting; tap it to load.',
+        'No more pop-ups about updates.',
+        'Fixed: the ⓘ screen (and the other panels) couldn\'t be closed on iPhone. Each now has a ✕.',
+      ],
+    },
     {
       version: 6,
       date: '2026-09-23',

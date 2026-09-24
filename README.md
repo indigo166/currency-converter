@@ -51,8 +51,8 @@ All sources are keyless and send CORS headers, so there's no server.
 
 Every change that reaches the phone is the next version number: Version 6, Version 7 …
 (a single counting number, like Better Translator). It's written **only in `version.js`**,
-with plain-English notes per release, and shows at the bottom of the app, on the ⓘ screen
-and in the "Updated to" notice.
+with plain-English notes per release, and shows in the top bar beside ⓘ ("v7") and on the
+ⓘ screen. No pop-ups — Julian asked for none.
 
 1. In `version.js`: `VERSION` + 1, and add an entry at the top of `RELEASES` with today's
    date and notes written for the person using the app.
@@ -62,5 +62,5 @@ and in the "Updated to" notice.
 
 On the phone: opening the app fresh loads the new version immediately. Switching back to
 an app that was already running checks for a newer version; if nothing is half-typed it
-reloads straight into it, otherwise the bottom line turns blue ("Version 7 is ready · tap to
-update") and waits for a tap.
+reloads straight into it, otherwise the version in the top bar turns blue ("v8 ↻") and waits
+for a tap.
