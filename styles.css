@@ -330,3 +330,21 @@ svg { display: block; }
 .rate-main .meta { display: flex; gap: 8px; align-items: baseline; font-size: 12px; width: 100%; }
 .rate-main .meta .up, .rate-main .meta .down, .rate-main .meta .flat { font-size: 12px; }
 .rate-main .chev { margin-left: auto; font-size: 12px; }
+
+/* The working: earlier steps above, the sum that made the answer on the line just above it */
+.steps { width: 100%; max-height: 50px; overflow-y: auto; display: flex; flex-direction: column; align-items: flex-end; scrollbar-width: none; }
+.steps::-webkit-scrollbar { display: none; }
+.step { display: flex; gap: 6px; align-items: baseline; font-size: 14px; padding: 2px 0; white-space: nowrap; }
+.step .s-expr { color: var(--muted); }
+.step .s-res { color: var(--text); opacity: 0.85; }
+.expr.working { color: var(--muted); max-width: 100%; white-space: nowrap; overflow: hidden; }
+/* Undo sits at the left of the conversion row, clear of Pin on the right */
+.conv-row { width: 100%; justify-content: flex-end; }
+.undo {
+  margin-right: auto; display: flex; align-items: center; gap: 4px; flex: none;
+  font-size: 13px; font-weight: 600; color: var(--primary);
+  background: var(--surface); padding: 6px 11px 6px 9px; border-radius: 999px;
+}
+.undo svg { width: 16px; height: 16px; }
+.calc-row { display: flex; align-items: center; width: 100%; min-height: 32px; }
+.calc-row .preview { margin-left: auto; }

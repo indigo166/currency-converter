@@ -14,10 +14,18 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 8;
+  const VERSION = 9;
 
   /** Newest first. Notes are written for the person using the app, not for the code. */
   const RELEASES = [
+    {
+      version: 9,
+      date: '2026-09-24',
+      notes: [
+        'Pressing = no longer hides how you got there: the sum stays above the answer (12,548+300 =), and when you keep going the earlier steps stay stacked above. Tap any of them to go back and edit it.',
+        'Undo (↶) takes back the last =, an AC, or starting a new number. In the Calculator tab it also takes back a line added to — or deleted from — the list.',
+      ],
+    },
     {
       version: 8,
       date: '2026-09-23',

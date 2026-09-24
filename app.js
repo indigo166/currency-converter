@@ -44,8 +44,13 @@
     pair: validPair(store.get('pair')) ? store.get('pair') : { from: 'JPY', to: 'USD' },
     rates: store.get('rates', null),
     // pos = cursor position within text (0…text.length); tapping the number moves it.
-    cur: { text: '', pos: 0, isResult: false },
+    // steps = each "=" in the current chain, {expr, result, from}, so the screen can show
+    // how the number on it was reached. Cleared when a fresh number is started.
+    cur: { text: '', pos: 0, isResult: false, steps: [] },
     calc: { text: '', pos: 0, editingId: null },
+    // Snapshots taken before anything that throws work away ("=", AC, starting over,
+    // deleting a tape line), per tab. ↶ pops one.
+    undo: { cur: [], calc: [] },
     pins: store.get('pins', []),
     selected: [],
     history: store.get('history', []),
@@ -79,6 +84,7 @@
     backspace: svg('M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z'),
     currency: svg('M12.89 11.1c-1.78-.59-2.64-.96-2.64-1.9 0-1.02 1.11-1.39 1.81-1.39 1.31 0 1.79.99 1.9 1.34l1.58-.67c-.15-.44-.82-1.91-2.66-2.23V5h-1.75v1.26c-2.6.56-2.62 2.85-2.62 2.96 0 2.27 2.25 2.91 3.35 3.31 1.58.56 2.28 1.07 2.28 2.03 0 1.13-1.05 1.61-1.98 1.61-1.82 0-2.34-1.87-2.4-2.09l-1.66.67c.63 2.19 2.28 2.78 3.02 2.96V19h1.75v-1.24c.52-.09 3.02-.59 3.02-3.22.01-1.39-.6-2.61-3-3.44zM3 21H1v-6h6v2H4.52c1.61 2.41 4.36 4 7.48 4a9 9 0 0 0 9-9h2c0 6.08-4.92 11-11 11-3.72 0-7.01-1.85-9-4.67V21zm-2-9C1 5.92 5.92 1 12 1c3.72 0 7.01 1.85 9 4.67V3h2v6h-6V7h2.48C17.87 4.59 15.12 3 12 3a9 9 0 0 0-9 9H1z'),
     calc: svg('M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM6.25 7.72h5v1.5h-5zM13 15.75h5v1.5h-5zm0-2.5h5v1.5h-5zM8 18h1.5v-2h2v-1.5h-2v-2H8v2H6V16h2zm6.09-7.05l1.41-1.41 1.41 1.41 1.06-1.06-1.41-1.42 1.41-1.41L16.91 6 15.5 7.41 14.09 6l-1.06 1.06 1.41 1.41-1.41 1.42z'),
+    undo: svg('M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z'),
     info: svg('M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'),
     ruler: svg('M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H3V8h2v4h2V8h2v4h2V8h2v4h2V8h2v4h2V8h2v8z'),
   };
@@ -200,6 +206,17 @@
   // Keypad behaviour
   // ------------------------------------------------------------------------
 
+  const MAX_UNDO = 30;
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  function snapCur() {
+    S.undo.cur.push(clone(S.cur));
+    if (S.undo.cur.length > MAX_UNDO) S.undo.cur.shift();
+  }
+  function snapCalc() {
+    S.undo.calc.push({ calc: clone(S.calc), tape: clone(S.tape) });
+    if (S.undo.calc.length > MAX_UNDO) S.undo.calc.shift();
+  }
+
   const EDIT_KEYS = new Set(['AC', 'back', '00', '000', '.', '%', '+', '-', '×', '÷']);
   const STARTS_NEW = (k) => /^\d$/.test(k) || k === '00' || k === '000' || k === '.';
 
@@ -213,6 +230,9 @@
       const expr = C.trimTrailingOps(c.text);
       const v = C.evaluateLoose(expr);
       if (v == null) return;
+      // Nothing new to record if "=" is pressed again on a result.
+      if (c.isResult && c.steps.length && expr === C.formatNumberForExpression(c.steps[c.steps.length - 1].result)) return;
+      snapCur();
       const rate = S.rates ? C.rateBetween(S.rates.rates, S.pair.from, S.pair.to) : null;
       if (rate != null) {
         S.history.unshift({
@@ -223,13 +243,21 @@
         store.set('history', S.history);
       }
       const text = C.formatNumberForExpression(v);
-      S.cur = { text, pos: text.length, isResult: true };
+      S.cur = { text, pos: text.length, isResult: true, steps: [...c.steps, { expr, result: v, from: S.pair.from }] };
       return;
     }
     if (!EDIT_KEYS.has(k) && !/^\d$/.test(k)) return;
-    const base = c.isResult && STARTS_NEW(k) ? { text: '', pos: 0 } : { text: c.text, pos: c.pos };
+    if (k === 'AC') {
+      if (c.text || c.steps.length) snapCur();
+      S.cur = { text: '', pos: 0, isResult: false, steps: [] };
+      return;
+    }
+    // A digit on a result starts a new calculation, so the old working goes — undoably.
+    const fresh = c.isResult && STARTS_NEW(k);
+    if (fresh) snapCur();
+    const base = fresh ? { text: '', pos: 0 } : { text: c.text, pos: c.pos };
     const r = C.editAt(base.text, base.pos, k);
-    S.cur = { text: r.text, pos: r.cur, isResult: false };
+    S.cur = { text: r.text, pos: r.cur, isResult: false, steps: fresh ? [] : c.steps };
   }
 
   /**
@@ -243,6 +271,7 @@
       const expr = C.trimTrailingOps(c.text);
       const v = C.evaluateLoose(expr);
       if (v == null) return;
+      snapCalc();
       const existing = c.editingId != null && S.tape.find((e) => e.id === c.editingId);
       if (existing) {
         existing.expression = expr;
@@ -257,6 +286,7 @@
       return;
     }
     if (!EDIT_KEYS.has(k) && !/^\d$/.test(k)) return;
+    if (k === 'AC' && c.text) snapCalc();
     const r = C.editAt(c.text, c.pos, k);
     S.calc = { text: r.text, pos: r.cur, editingId: c.editingId };
   }
@@ -435,13 +465,45 @@
       ${renderRateLine()}
       ${renderPins()}
       <div class="display">
-        <div class="expr" data-caret="cur" data-fit="26">${exprHTML(S.cur.text, S.cur.pos, '&nbsp;')}</div>
+        ${renderSteps(from)}
+        ${renderWorkingLine()}
         <div class="big" data-fit="44">${preview != null ? esc(C.formatAmount(preview, from)) : '&nbsp;'}</div>
         <div class="conv-row">
+          ${undoButton('cur')}
           <div class="${convCls}">${convHtml}</div>
           ${preview != null ? `<button class="pill" data-action="pin">${I.pin}Pin</button>` : ''}
         </div>
       </div>`;
+  }
+
+  /**
+   * How the number on screen was reached. After "=", the line above the answer keeps the
+   * sum that produced it ("12,548+300 =") instead of repeating the answer; carry on with
+   * "+10 =" and the earlier step stays stacked above. Each is tappable to go back and edit.
+   */
+  function renderWorkingLine() {
+    const c = S.cur;
+    const last = c.steps[c.steps.length - 1];
+    if (c.isResult && last) {
+      return `<button class="expr working" data-action="step-load" data-idx="${c.steps.length - 1}" data-fit="26">${esc(C.displayExpression(last.expr))} =</button>`;
+    }
+    return `<div class="expr" data-caret="cur" data-fit="26">${exprHTML(c.text, c.pos, '&nbsp;')}</div>`;
+  }
+
+  function renderSteps() {
+    const c = S.cur;
+    const shown = c.isResult ? c.steps.slice(0, -1) : c.steps;
+    if (!shown.length) return '';
+    return `<div class="steps" id="steps">${shown.map((st, i) => `
+      <button class="step" data-action="step-load" data-idx="${i}">
+        <span class="s-expr">${esc(C.displayExpression(st.expr))} =</span>
+        <span class="s-res">${esc(C.formatAmount(st.result, st.from))}</span>
+      </button>`).join('')}</div>`;
+  }
+
+  function undoButton(tab) {
+    if (!S.undo[tab].length) return '';
+    return `<button class="undo" data-action="undo" aria-label="Undo">${I.undo}Undo</button>`;
   }
 
   function renderCalc() {
@@ -461,7 +523,7 @@
       ${S.calc.editingId != null ? '<div class="editing-bar"><span>Editing a line — = saves it</span><button class="text-btn" data-action="tape-cancel">Cancel</button></div>' : ''}
       <div class="display calc">
         <div class="expr" data-caret="calc" data-fit="38">${exprHTML(S.calc.text, S.calc.pos, '0')}</div>
-        <div class="preview">${preview != null && hasOp ? '= ' + esc(C.formatPlainNumber(preview)) : ''}</div>
+        <div class="calc-row">${undoButton('calc')}<div class="preview">${preview != null && hasOp ? '= ' + esc(C.formatPlainNumber(preview)) : ''}</div></div>
       </div>`;
   }
 
@@ -525,7 +587,10 @@
       const cs = getComputedStyle(el);
       const margins = parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
       if (el.id === 'tape') need += TAPE_FLOOR;
-      else if (el.classList.contains('display') && !el.classList.contains('calc')) need += DISPLAY_FLOOR;
+      else if (el.classList.contains('display') && !el.classList.contains('calc')) {
+        const steps = el.querySelector('.steps');
+        need += DISPLAY_FLOOR + (steps ? steps.offsetHeight : 0);
+      }
       else need += el.offsetHeight + margins;
     }
     const pcs = getComputedStyle(pad);
@@ -586,6 +651,8 @@
       if (S.scrollTapeToEnd) { t.scrollTop = t.scrollHeight; S.scrollTapeToEnd = false; }
       else t.scrollTop = tapeTop;
     }
+    const steps = document.getElementById('steps');
+    if (steps) steps.scrollTop = steps.scrollHeight;
     sizePad();
     fitText();
   }
@@ -874,7 +941,10 @@
       // The pin keeps the pair it was taken with, so changing the pair later can't
       // relabel a number computed at a different rate.
       S.pins.push({
-        id: newId(), expression: C.trimTrailingOps(S.cur.text), amount: v,
+        // After "=", pin the sum that produced the answer, not the bare answer.
+        id: newId(),
+        expression: S.cur.isResult && S.cur.steps.length ? S.cur.steps[S.cur.steps.length - 1].expr : C.trimTrailingOps(S.cur.text),
+        amount: v,
         from: S.pair.from, to: S.pair.to, converted: rate != null ? v * rate : null, ts: Date.now(),
       });
       if (S.pins.length > MAX_PINS) S.pins.splice(0, S.pins.length - MAX_PINS);
@@ -906,7 +976,31 @@
       S.calc = { text: e.expression, pos: e.expression.length, editingId: e.id };
       renderView();
     },
+    undo() {
+      if (S.tab === 'calc') {
+        const snap = S.undo.calc.pop();
+        if (!snap) return;
+        S.calc = snap.calc;
+        S.tape = snap.tape;
+        store.set('tape', S.tape);
+      } else {
+        const snap = S.undo.cur.pop();
+        if (!snap) return;
+        S.cur = snap;
+      }
+      renderView();
+    },
+    'step-load'(el) {
+      const i = Number(el.dataset.idx);
+      const st = S.cur.steps[i];
+      if (!st) return;
+      snapCur();
+      // Back to that sum, ready to edit; the steps after it are dropped (and undoable).
+      S.cur = { text: st.expr, pos: st.expr.length, isResult: false, steps: S.cur.steps.slice(0, i) };
+      renderView();
+    },
     'tape-delete'(el) {
+      snapCalc();
       const id = Number(el.dataset.id);
       S.tape = S.tape.filter((x) => x.id !== id);
       if (S.calc.editingId === id) S.calc = { text: '', pos: 0, editingId: null };
@@ -915,6 +1009,7 @@
     },
     'tape-clear'() {
       if (!confirm('Clear all tape lines?')) return;
+      snapCalc();
       S.tape = []; S.calc = { text: '', pos: 0, editingId: null }; store.set('tape', S.tape); renderView();
     },
     'tape-cancel'() { S.calc = { text: '', pos: 0, editingId: null }; renderView(); },
@@ -935,7 +1030,7 @@
       if (!h) return;
       S.pair = { from: h.from, to: h.to };
       store.set('pair', S.pair);
-      S.cur = { text: h.expression, pos: h.expression.length, isResult: false };
+      S.cur = { text: h.expression, pos: h.expression.length, isResult: false, steps: [] };
       closeSheet();
       render();
     },
@@ -957,7 +1052,7 @@
       if (!p) return;
       S.pair = { from: p.from, to: p.to };
       store.set('pair', S.pair);
-      S.cur = { text: p.expression, pos: p.expression.length, isResult: false };
+      S.cur = { text: p.expression, pos: p.expression.length, isResult: false, steps: [] };
       render();
       toast('Loaded');
     },
