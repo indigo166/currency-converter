@@ -4,11 +4,14 @@
  * network — the page keeps its own last-known rates, and old history isn't worth
  * serving as if it were current.
  *
- * Bump CACHE on every release so old shells are dropped.
+ * The version arrives on the registration URL (sw.js?v=<version>) from version.js, so the
+ * cache name follows the app and there is no second place to bump. A new version also
+ * changes the URL, which is what tells the browser to install this worker afresh.
  */
-const CACHE = 'cc-v1.0.1';
+const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
+const CACHE = 'cc-v' + VERSION;
 const SHELL = [
-  './', 'index.html', 'styles.css', 'core.js', 'app.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'version.js', 'core.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
 ];
 

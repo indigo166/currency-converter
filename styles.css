@@ -274,3 +274,14 @@ svg { display: block; }
 #app.compact .conv { font-size: 16px; }
 #app.compact .conv-row { min-height: 30px; }
 #app.compact .display { padding-top: 0; padding-bottom: 2px; }
+
+/* About / what's new */
+.about-head { padding: 4px 0 14px; border-bottom: 1px solid var(--surface-2); margin-bottom: 12px; }
+.about-v { font-size: 26px; font-weight: 700; }
+.about-head .muted { font-size: 13px; margin-top: 2px; }
+.rel { padding: 4px 0 10px; }
+.rel-head { display: flex; align-items: baseline; gap: 8px; font-size: 16px; }
+.rel-head .muted { margin-left: auto; font-size: 13px; }
+.rel .now { font-size: 11px; background: var(--primary); color: var(--on-primary); border-radius: 999px; padding: 2px 8px; font-weight: 600; }
+.rel ul { margin: 6px 0 0; padding-left: 20px; color: var(--text); font-size: 14px; line-height: 1.45; }
+#toast { white-space: normal; max-width: calc(100% - 32px); text-align: center; }

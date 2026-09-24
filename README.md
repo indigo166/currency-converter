@@ -49,12 +49,17 @@ All sources are keyless and send CORS headers, so there's no server.
 
 ## Releasing
 
-```bash
-node --test            # all green first
-# bump CACHE in sw.js and VERSION in app.js
-git commit -am "…" && git push
-```
+Every change that reaches the phone is a new version. The number and the notes live in
+**`version.js` and nowhere else** — the About screen (ⓘ), the "Updated to v…" notice and the
+service worker's cache all read from it.
 
-GitHub Pages redeploys in about a minute. The phone picks up the new version on the
-second launch after that (the first launch serves the cached shell and fetches the new one
-in the background).
+1. In `version.js`: bump `VERSION` (fix → last number, feature → middle number) and add an
+   entry at the top of `RELEASES` with today's date and notes written for the person using it.
+2. `node --test` — fails if the newest entry doesn't match `VERSION`, if notes are missing, or
+   if a version number has been hardcoded anywhere else.
+3. `git commit -am "…" && git push` — GitHub Pages redeploys in about a minute (its CDN can
+   hold the old files for up to 10 more).
+
+On the phone the update lands on the next open: the service worker fetches fresh files when
+online, the page reloads itself once when the new worker takes over, and the app says
+"Updated to vX" the first time it runs.

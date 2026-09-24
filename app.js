@@ -10,7 +10,7 @@
   'use strict';
 
   const C = window.Core;
-  const VERSION = '1.0.1';
+  const { VERSION, RELEASES } = window.AppVersion;
 
   // ------------------------------------------------------------------------
   // Storage — everything lives on the phone. Home-screen web apps on iOS keep their
@@ -77,6 +77,7 @@
     backspace: svg('M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-3 12.59L17.59 17 14 13.41 10.41 17 9 15.59 12.59 12 9 8.41 10.41 7 14 10.59 17.59 7 19 8.41 15.41 12 19 15.59z'),
     currency: svg('M12.89 11.1c-1.78-.59-2.64-.96-2.64-1.9 0-1.02 1.11-1.39 1.81-1.39 1.31 0 1.79.99 1.9 1.34l1.58-.67c-.15-.44-.82-1.91-2.66-2.23V5h-1.75v1.26c-2.6.56-2.62 2.85-2.62 2.96 0 2.27 2.25 2.91 3.35 3.31 1.58.56 2.28 1.07 2.28 2.03 0 1.13-1.05 1.61-1.98 1.61-1.82 0-2.34-1.87-2.4-2.09l-1.66.67c.63 2.19 2.28 2.78 3.02 2.96V19h1.75v-1.24c.52-.09 3.02-.59 3.02-3.22.01-1.39-.6-2.61-3-3.44zM3 21H1v-6h6v2H4.52c1.61 2.41 4.36 4 7.48 4a9 9 0 0 0 9-9h2c0 6.08-4.92 11-11 11-3.72 0-7.01-1.85-9-4.67V21zm-2-9C1 5.92 5.92 1 12 1c3.72 0 7.01 1.85 9 4.67V3h2v6h-6V7h2.48C17.87 4.59 15.12 3 12 3a9 9 0 0 0-9 9H1z'),
     calc: svg('M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM6.25 7.72h5v1.5h-5zM13 15.75h5v1.5h-5zm0-2.5h5v1.5h-5zM8 18h1.5v-2h2v-1.5h-2v-2H8v2H6V16h2zm6.09-7.05l1.41-1.41 1.41 1.41 1.06-1.06-1.41-1.42 1.41-1.41L16.91 6 15.5 7.41 14.09 6l-1.06 1.06 1.41 1.41-1.41 1.42z'),
+    info: svg('M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z'),
     ruler: svg('M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 10H3V8h2v4h2V8h2v4h2V8h2v4h2V8h2v4h2V8h2v8z'),
   };
 
@@ -291,10 +292,11 @@
         <button class="icon-btn" data-action="swap" aria-label="Swap currencies">${I.swap}</button>
         <button class="icon-btn" data-action="open-history" aria-label="History">${I.history}</button>`;
     } else if (S.tab === 'calc') {
-      html = '<div class="title">Calculator</div>';
+      html = '<div class="title">Calculator</div><div class="spacer"></div>';
     } else {
-      html = '<div class="title">Units</div>';
+      html = '<div class="title">Units</div><div class="spacer"></div>';
     }
+    html += `<button class="icon-btn" data-action="open-about" aria-label="Version and what's new">${I.info}</button>`;
     $('#topbar').innerHTML = html;
     if (S.tab === 'currency') {
       const rl = document.querySelector('.rateline');
@@ -584,8 +586,20 @@
           <div class="field"><label>From</label><select data-change="pair-from">${opts(S.pair.from)}</select></div>
           <button class="icon-btn" data-action="swap" aria-label="Swap">${I.swap}</button>
           <div class="field"><label>To</label><select data-change="pair-to">${opts(S.pair.to)}</select></div>
-        </div>
-        <div class="source" style="margin-top:16px">v${VERSION} · rates: ${S.rates ? (S.rates.source === 'ecb' ? 'ECB (fallback — no COP)' : 'jsDelivr currency-api') + ', ' + esc(S.rates.date) : 'none yet'}</div>`;
+        </div>`;
+    } else if (S.sheet === 'about') {
+      const fmtDate = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const rel = RELEASES.map((r) => `
+        <div class="rel">
+          <div class="rel-head"><b>v${esc(r.version)}</b>${r.version === VERSION ? '<span class="now">this version</span>' : ''}<span class="muted">${fmtDate(r.date)}</span></div>
+          <ul>${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
+        </div>`).join('');
+      const rates = S.rates
+        ? `${S.rates.source === 'ecb' ? 'ECB (fallback — no COP)' : 'jsDelivr currency-api'} · ${esc(C.shortDate(S.rates.date))}`
+        : 'not fetched yet';
+      body = `<div class="about-head"><div class="about-v">Version ${esc(VERSION)}</div>
+          <div class="muted">Released ${fmtDate(RELEASES[0].date)} · rates: ${rates}</div></div>
+        <h2>What's new</h2>${rel}`;
     } else if (S.sheet === 'history') {
       const items = S.history.map((h) => `
         <div class="hist-item" data-action="history-load" data-id="${h.id}">
@@ -771,12 +785,12 @@
   // Events
   // ------------------------------------------------------------------------
 
-  function toast(msg) {
+  function toast(msg, ms) {
     const t = $('#toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+    toast._t = setTimeout(() => t.classList.remove('show'), ms || 1800);
   }
 
   function setPair(from, to) {
@@ -793,6 +807,7 @@
     refresh() { refreshRates(true); },
     'open-pair'() { openSheet('pair'); },
     'open-history'() { openSheet('history'); },
+    'open-about'() { openSheet('about'); },
     'open-chart'() { openChart(); },
     'dismiss-install'() { store.set('installHintDismissed', true); renderView(); },
     pin() {
@@ -970,9 +985,17 @@
         if (!reloaded) { reloaded = true; location.reload(); }
       });
     }
-    navigator.serviceWorker.register('sw.js').catch(() => { /* offline shell unavailable */ });
+    navigator.serviceWorker.register('sw.js?v=' + encodeURIComponent(VERSION)).catch(() => { /* offline shell unavailable */ });
   }
 
   render();
   refreshRates(false);
+
+  // Say so once when a new version arrives, so it's clear the phone got the update.
+  // An install from before versions were recorded has no seenVersion but does have
+  // rates cached — that's an update too, not a first launch.
+  const seen = store.get('seenVersion', null);
+  const updated = seen ? seen !== VERSION : store.get('rates', null) != null;
+  if (updated) setTimeout(() => toast(`Updated to v${VERSION} — tap ⓘ for what's new`, 4000), 600);
+  store.set('seenVersion', VERSION);
 })();
