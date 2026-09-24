@@ -14,10 +14,19 @@
 (function (root) {
   'use strict';
 
-  const VERSION = 7;
+  const VERSION = 8;
 
   /** Newest first. Notes are written for the person using the app, not for the code. */
   const RELEASES = [
+    {
+      version: 8,
+      date: '2026-09-23',
+      notes: [
+        'Fix a digit in the middle: tap anywhere in the number you\'re typing to put the cursor there (or press and slide), then backspace or type. Works in both the Currency and Calculator tabs.',
+        'Quick pairs are now just JPY → USD and USD → JPY. Other currencies are still under the title.',
+        'The rate line shows both directions at once: ¥100 = $0.634 · $1 = ¥157.63.',
+      ],
+    },
     {
       version: 7,
       date: '2026-09-23',

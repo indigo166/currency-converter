@@ -41,10 +41,11 @@
 
   const S = {
     tab: ['currency', 'calc', 'units'].includes(store.get('tab')) ? store.get('tab') : 'currency',
-    pair: validPair(store.get('pair')) ? store.get('pair') : { from: 'USD', to: 'JPY' },
+    pair: validPair(store.get('pair')) ? store.get('pair') : { from: 'JPY', to: 'USD' },
     rates: store.get('rates', null),
-    cur: { text: '', isResult: false },
-    calc: { text: '', editingId: null },
+    // pos = cursor position within text (0…text.length); tapping the number moves it.
+    cur: { text: '', pos: 0, isResult: false },
+    calc: { text: '', pos: 0, editingId: null },
     pins: store.get('pins', []),
     selected: [],
     history: store.get('history', []),
@@ -199,79 +200,110 @@
   // Keypad behaviour
   // ------------------------------------------------------------------------
 
+  const EDIT_KEYS = new Set(['AC', 'back', '00', '000', '.', '%', '+', '-', '×', '÷']);
+  const STARTS_NEW = (k) => /^\d$/.test(k) || k === '00' || k === '000' || k === '.';
+
   /**
-   * Currency tab. After "=", digits start a new number (what every phone calculator
-   * does) while operators chain off the result ("+10" on 200 → 210).
+   * Currency tab. Keys apply at the cursor. After "=", digits start a new number (what
+   * every phone calculator does) while operators chain off the result ("+10" on 200 → 210).
    */
   function keyCurrency(k) {
     const c = S.cur;
-    const fresh = c.isResult ? '' : c.text;
-    let text = c.text;
-    switch (k) {
-      case 'AC': text = ''; break;
-      case 'back': text = C.pressBackspace(c.text); break;
-      case '00': text = C.pressZeros(fresh, 2); break;
-      case '000': text = C.pressZeros(fresh, 3); break;
-      case '.': text = C.pressDecimal(fresh); break;
-      case '%': text = C.pressPercent(c.text); break;
-      case '+': case '-': case '×': case '÷': text = C.pressOperator(c.text, k); break;
-      case '=': {
-        const expr = C.trimTrailingOps(c.text);
-        const v = C.evaluateLoose(expr);
-        if (v == null) return;
-        const rate = S.rates ? C.rateBetween(S.rates.rates, S.pair.from, S.pair.to) : null;
-        if (rate != null) {
-          S.history.unshift({
-            id: newId(), expression: expr, result: v, from: S.pair.from, to: S.pair.to,
-            converted: v * rate, rate, ts: Date.now(),
-          });
-          S.history.length = Math.min(S.history.length, MAX_HISTORY);
-          store.set('history', S.history);
-        }
-        S.cur = { text: C.formatNumberForExpression(v), isResult: true };
-        return;
+    if (k === '=') {
+      const expr = C.trimTrailingOps(c.text);
+      const v = C.evaluateLoose(expr);
+      if (v == null) return;
+      const rate = S.rates ? C.rateBetween(S.rates.rates, S.pair.from, S.pair.to) : null;
+      if (rate != null) {
+        S.history.unshift({
+          id: newId(), expression: expr, result: v, from: S.pair.from, to: S.pair.to,
+          converted: v * rate, rate, ts: Date.now(),
+        });
+        S.history.length = Math.min(S.history.length, MAX_HISTORY);
+        store.set('history', S.history);
       }
-      default: text = C.pressDigit(fresh, k);
+      const text = C.formatNumberForExpression(v);
+      S.cur = { text, pos: text.length, isResult: true };
+      return;
     }
-    S.cur = { text, isResult: false };
+    if (!EDIT_KEYS.has(k) && !/^\d$/.test(k)) return;
+    const base = c.isResult && STARTS_NEW(k) ? { text: '', pos: 0 } : { text: c.text, pos: c.pos };
+    const r = C.editAt(base.text, base.pos, k);
+    S.cur = { text: r.text, pos: r.cur, isResult: false };
   }
 
   /**
-   * Calculator tab — an adding-machine tape. "=" commits the line and clears the input
-   * (leaving "20" there would turn a typed "20+30" into "2020+30"). A line tapped back
-   * open is rewritten in place and keeps its position on the roll.
+   * Calculator tab — an adding-machine tape. Keys apply at the cursor. "=" commits the
+   * line and clears the input (leaving "20" there would turn a typed "20+30" into
+   * "2020+30"). A line tapped back open is rewritten in place and keeps its position.
    */
   function keyCalc(k) {
     const c = S.calc;
-    let text = c.text;
-    switch (k) {
-      case 'AC': text = ''; break;
-      case 'back': text = C.pressBackspace(text); break;
-      case '00': text = C.pressZeros(text, 2); break;
-      case '000': text = C.pressZeros(text, 3); break;
-      case '.': text = C.pressDecimal(text); break;
-      case '%': text = C.pressPercent(text); break;
-      case '+': case '-': case '×': case '÷': text = C.pressOperator(text, k); break;
-      case '=': {
-        const expr = C.trimTrailingOps(text);
-        const v = C.evaluateLoose(expr);
-        if (v == null) return;
-        const existing = c.editingId != null && S.tape.find((e) => e.id === c.editingId);
-        if (existing) {
-          existing.expression = expr;
-          existing.result = v;
-        } else {
-          S.tape.push({ id: newId(), expression: expr, result: v, ts: Date.now() });
-          if (S.tape.length > MAX_TAPE) S.tape.splice(0, S.tape.length - MAX_TAPE);
-          S.scrollTapeToEnd = true;
-        }
-        store.set('tape', S.tape);
-        S.calc = { text: '', editingId: null };
-        return;
+    if (k === '=') {
+      const expr = C.trimTrailingOps(c.text);
+      const v = C.evaluateLoose(expr);
+      if (v == null) return;
+      const existing = c.editingId != null && S.tape.find((e) => e.id === c.editingId);
+      if (existing) {
+        existing.expression = expr;
+        existing.result = v;
+      } else {
+        S.tape.push({ id: newId(), expression: expr, result: v, ts: Date.now() });
+        if (S.tape.length > MAX_TAPE) S.tape.splice(0, S.tape.length - MAX_TAPE);
+        S.scrollTapeToEnd = true;
       }
-      default: text = C.pressDigit(text, k);
+      store.set('tape', S.tape);
+      S.calc = { text: '', pos: 0, editingId: null };
+      return;
     }
-    S.calc = { text, editingId: c.editingId };
+    if (!EDIT_KEYS.has(k) && !/^\d$/.test(k)) return;
+    const r = C.editAt(c.text, c.pos, k);
+    S.calc = { text: r.text, pos: r.cur, editingId: c.editingId };
+  }
+
+  /**
+   * The expression as tappable characters with a cursor. Each raw character is its own
+   * span tagged with its index; the display commas are separate, untagged spans, so a tap
+   * on the "2" of "12,000" still lands on raw index 1.
+   */
+  function exprHTML(text, pos, placeholder) {
+    if (!text) return placeholder;
+    const commas = C.commaPositions(text);
+    let h = '';
+    for (let i = 0; i <= text.length; i++) {
+      if (i === pos) h += '<span class="caret"></span>';
+      if (i === text.length) break;
+      if (commas.has(i)) h += '<span class="sep">,</span>';
+      const ch = text[i] === '-' ? '−' : esc(text[i]);
+      h += `<span data-i="${i}">${ch}</span>`;
+    }
+    return h;
+  }
+
+  /** The raw index a touch at (x, y) means: before or after the nearest character. */
+  function indexAtPoint(el, x, y) {
+    const spans = el.querySelectorAll('[data-i]');
+    if (!spans.length) return 0;
+    let best = null;
+    let bestD = Infinity;
+    for (const sp of spans) {
+      const r = sp.getBoundingClientRect();
+      const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+      const dx = x < r.left ? r.left - x : x > r.right ? x - r.right : 0;
+      const d = dy * 1000 + dx; // same line first, then nearest across it
+      if (d < bestD) { bestD = d; best = { i: Number(sp.dataset.i), r }; }
+    }
+    return x < (best.r.left + best.r.right) / 2 ? best.i : best.i + 1;
+  }
+
+  /** Move the cursor without re-rendering the whole screen (keeps a drag smooth). */
+  function placeCaret(which, pos) {
+    const st = which === 'calc' ? S.calc : S.cur;
+    if (st.pos === pos && !(which === 'cur' && st.isResult)) return;
+    st.pos = pos;
+    if (which === 'cur') st.isResult = false; // moving into a result means editing it
+    const el = document.querySelector(`[data-caret="${which}"]`);
+    if (el) el.innerHTML = exprHTML(st.text, pos, el.innerHTML);
   }
 
   function onKey(k) {
@@ -321,9 +353,10 @@
       const missing = [from, to].filter((c) => !S.rates.rates[c]);
       return `<div class="rateline"><span class="err">No rate for ${missing.join(' or ')} today</span><div class="spacer"></div>${refreshBtn}</div>`;
     }
-    // Quoted on a base people use: 100 JPY, not 1 JPY at 0.0061.
-    const q = C.quoteFor(rate);
-    const base = q.baseUnits === 1 ? '1' : q.baseUnits.toLocaleString('en-US');
+    // Both directions, the current one first: "¥100 = $0.634 · $1 = ¥157.63". Each is
+    // quoted on the base people use (per 100 yen, per dollar), so neither reads as 0.0063.
+    const quotes = `<span class="q">${esc(C.quoteText(from, to, rate))}</span>`
+      + `<span class="q2">${esc(C.quoteText(to, from, 1 / rate))}</span>`;
     const prevRate = S.rates.prev ? C.rateBetween(S.rates.prev, from, to) : null;
     let move = '';
     if (prevRate) {
@@ -332,7 +365,7 @@
       const pct = (rate - prevRate) / prevRate;
       const cls = pct > PCT_EPSILON ? 'up' : pct < -PCT_EPSILON ? 'down' : 'flat';
       const arrow = cls === 'up' ? '▲' : cls === 'down' ? '▼' : '—';
-      move = `<span class="${cls}">${arrow} ${Math.abs(pct * 100).toFixed(2)}%</span>`;
+      move = `<span class="${cls}">${arrow} ${Math.abs(pct * 100).toFixed(2)}% ${esc(from)}→${esc(to)}</span>`;
     }
     const stale = Date.now() - S.rates.refreshedAt > STALE_MS;
     let note = C.shortDate(S.rates.date);
@@ -340,10 +373,8 @@
     if (S.rates.source === 'ecb') note += ' · ECB';
     return `<div class="rateline">
       <button class="rate-main" data-action="open-chart">
-        <span class="q">${base} ${from} = ${C.formatQuoteValue(q)} ${to}</span>
-        ${move}
-        <span class="note ${stale ? 'stale' : ''}">${note}</span>
-        <span class="chev">›</span>
+        <span class="quotes">${quotes}</span>
+        <span class="meta">${move}<span class="note ${stale ? 'stale' : ''}">${note}</span><span class="chev">chart ›</span></span>
       </button>${refreshBtn}</div>`;
   }
 
@@ -395,16 +426,16 @@
     if (preview != null && rate != null) convHtml = '≈ ' + esc(C.formatAmount(preview * rate, to));
     else if (preview != null && S.rates && rate == null) { convHtml = `no ${to} rate in today's table`; convCls += ' err'; }
     const chips = C.QUICK_PAIRS.map(([f, t]) =>
-      `<button class="chip ${f === from && t === to ? 'on' : ''}" data-action="pair" data-from="${f}" data-to="${t}">${f}→${t}</button>`).join('');
+      `<button class="seg ${f === from && t === to ? 'on' : ''}" data-action="pair" data-from="${f}" data-to="${t}">${f} → ${t}</button>`).join('');
     // The big line always shows, in the currency being typed: it's the only thing on
     // screen saying whether 4800 means dollars or yen.
     return `
       ${installHint()}
-      <div class="chips quick">${chips}</div>
+      <div class="segs">${chips}</div>
       ${renderRateLine()}
       ${renderPins()}
       <div class="display">
-        <div class="expr">${S.cur.text ? esc(C.displayExpression(S.cur.text)) : '&nbsp;'}</div>
+        <div class="expr" data-caret="cur" data-fit="26">${exprHTML(S.cur.text, S.cur.pos, '&nbsp;')}</div>
         <div class="big" data-fit="44">${preview != null ? esc(C.formatAmount(preview, from)) : '&nbsp;'}</div>
         <div class="conv-row">
           <div class="${convCls}">${convHtml}</div>
@@ -429,7 +460,7 @@
       <div class="tape" id="tape">${lines || '<div class="empty">Press = and each result stacks up here.<br>Tap a line to fix it.</div>'}</div>
       ${S.calc.editingId != null ? '<div class="editing-bar"><span>Editing a line — = saves it</span><button class="text-btn" data-action="tape-cancel">Cancel</button></div>' : ''}
       <div class="display calc">
-        <div class="expr" data-fit="38">${S.calc.text ? esc(C.displayExpression(S.calc.text)) : '0'}</div>
+        <div class="expr" data-caret="calc" data-fit="38">${exprHTML(S.calc.text, S.calc.pos, '0')}</div>
         <div class="preview">${preview != null && hasOp ? '= ' + esc(C.formatPlainNumber(preview)) : ''}</div>
       </div>`;
   }
@@ -510,16 +541,29 @@
     document.documentElement.style.setProperty('--key-h', clamped + 'px');
   }
 
-  /** Shrink a line's font until it fits its box, so long amounts never clip. */
+  /**
+   * Shrink a line's font until it fits its box, so long amounts never clip. An expression
+   * that still doesn't fit at a readable size wraps onto a second line instead of being
+   * cut off — every digit has to stay visible now that any of them can be tapped.
+   */
   function fitText() {
+    const compact = $('#app').classList.contains('compact');
     document.querySelectorAll('[data-fit]').forEach((el) => {
-      const max = parseFloat(el.dataset.fit) * ($('#app').classList.contains('compact') ? 0.75 : 1);
+      const max = parseFloat(el.dataset.fit) * (compact ? 0.75 : 1);
+      const wraps = el.hasAttribute('data-caret');
+      const floor = wraps ? 20 : 16;
+      el.style.whiteSpace = 'nowrap';
+      el.style.wordBreak = '';
       let size = max;
       el.style.fontSize = size + 'px';
       const box = el.parentElement.clientWidth - 12;
-      while (el.scrollWidth > box && size > 16) {
+      while (el.scrollWidth > box && size > floor) {
         size -= 2;
         el.style.fontSize = size + 'px';
+      }
+      if (wraps && el.scrollWidth > box) {
+        el.style.whiteSpace = 'normal';
+        el.style.wordBreak = 'break-all';
       }
     });
   }
@@ -859,21 +903,21 @@
     'tape-edit'(el) {
       const e = S.tape.find((x) => x.id === Number(el.dataset.id));
       if (!e) return;
-      S.calc = { text: e.expression, editingId: e.id };
+      S.calc = { text: e.expression, pos: e.expression.length, editingId: e.id };
       renderView();
     },
     'tape-delete'(el) {
       const id = Number(el.dataset.id);
       S.tape = S.tape.filter((x) => x.id !== id);
-      if (S.calc.editingId === id) S.calc = { text: '', editingId: null };
+      if (S.calc.editingId === id) S.calc = { text: '', pos: 0, editingId: null };
       store.set('tape', S.tape);
       renderView();
     },
     'tape-clear'() {
       if (!confirm('Clear all tape lines?')) return;
-      S.tape = []; S.calc = { text: '', editingId: null }; store.set('tape', S.tape); renderView();
+      S.tape = []; S.calc = { text: '', pos: 0, editingId: null }; store.set('tape', S.tape); renderView();
     },
-    'tape-cancel'() { S.calc = { text: '', editingId: null }; renderView(); },
+    'tape-cancel'() { S.calc = { text: '', pos: 0, editingId: null }; renderView(); },
     'unit-cat'(el) {
       const cat = el.dataset.cat;
       const [f, t] = C.UNIT_DEFAULTS[cat];
@@ -891,7 +935,7 @@
       if (!h) return;
       S.pair = { from: h.from, to: h.to };
       store.set('pair', S.pair);
-      S.cur = { text: h.expression, isResult: false };
+      S.cur = { text: h.expression, pos: h.expression.length, isResult: false };
       closeSheet();
       render();
     },
@@ -913,7 +957,7 @@
       if (!p) return;
       S.pair = { from: p.from, to: p.to };
       store.set('pair', S.pair);
-      S.cur = { text: p.expression, isResult: false };
+      S.cur = { text: p.expression, pos: p.expression.length, isResult: false };
       render();
       toast('Loaded');
     },
@@ -967,6 +1011,25 @@
     const out = document.getElementById('unit-out');
     if (out) out.innerHTML = unitResult();
   });
+
+  // Cursor: touch the number to put the cursor there; keep the finger down and slide to
+  // fine-tune. Pointer events rather than click, which iPhone Safari won't deliver on a
+  // plain element — the same trap that made the ⓘ screen impossible to close.
+  let caretDrag = null;
+  document.addEventListener('pointerdown', (e) => {
+    const el = e.target.closest('[data-caret]');
+    if (!el) return;
+    const st = el.dataset.caret === 'calc' ? S.calc : S.cur;
+    if (!st.text) return;
+    caretDrag = el.dataset.caret;
+    placeCaret(caretDrag, indexAtPoint(el, e.clientX, e.clientY));
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!caretDrag) return;
+    const el = document.querySelector(`[data-caret="${caretDrag}"]`);
+    if (el) placeCaret(caretDrag, indexAtPoint(el, e.clientX, e.clientY));
+  });
+  ['pointerup', 'pointercancel'].forEach((t) => document.addEventListener(t, () => { caretDrag = null; }));
 
   // Chart scrubbing: touch and drag anywhere on the plot.
   let scrubbing = false;

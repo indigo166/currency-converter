@@ -303,3 +303,30 @@ svg { display: block; }
 .sheet-close svg { width: 18px; height: 18px; }
 .sheet h2 { padding-right: 44px; }
 .about-head { padding-right: 44px; }
+
+/* Cursor in the expression. Each character is its own span so a tap lands on it. */
+[data-caret] { cursor: pointer; touch-action: none; }
+[data-caret] .caret {
+  display: inline-block; width: 2px; height: 0.95em; margin: 0 -1px; vertical-align: -0.1em;
+  background: var(--primary); border-radius: 1px; animation: blink 1.05s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.expr { text-align: right; }
+
+/* Two-way pair switch: JPY → USD | USD → JPY */
+.segs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 2px 0 4px; }
+.seg {
+  padding: 9px 4px; border-radius: 12px; background: var(--surface); color: var(--muted);
+  font-size: 15px; font-weight: 500; text-align: center;
+}
+.seg.on { background: var(--primary); color: var(--on-primary); font-weight: 700; }
+
+/* Rate block: both directions on top, the day's move and date underneath */
+.rate-main { flex-direction: column; align-items: flex-start; gap: 1px; }
+.rate-main .quotes { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.rate-main .q { font-size: 16px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.rate-main .q2 { font-size: 15px; color: var(--text); opacity: 0.8; white-space: nowrap; }
+.rate-main .q2::before { content: '·'; margin-right: 10px; color: var(--muted); }
+.rate-main .meta { display: flex; gap: 8px; align-items: baseline; font-size: 12px; width: 100%; }
+.rate-main .meta .up, .rate-main .meta .down, .rate-main .meta .flat { font-size: 12px; }
+.rate-main .chev { margin-left: auto; font-size: 12px; }

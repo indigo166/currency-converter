@@ -39,8 +39,12 @@
 
   const CODES = new Set(CURRENCIES.map((c) => c.code));
 
-  /** The pairs actually used — one tap each. The long tail lives behind the title. */
-  const QUICK_PAIRS = [['USD', 'JPY'], ['JPY', 'USD'], ['USD', 'COP'], ['COP', 'USD']];
+  /**
+   * The pairs actually used — one tap each; everything else lives behind the title.
+   * Yen only since version 8 (Julian: "I just need USD to JPY or JPY to USD"), with
+   * JPY → USD first because it's the direction he reaches for most.
+   */
+  const QUICK_PAIRS = [['JPY', 'USD'], ['USD', 'JPY']];
 
   // ---------------------------------------------------------------------------
   // Calculator engine — + − × ÷ with normal precedence, left-associative
@@ -131,81 +135,141 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Keypad editing. Input always lands at the end — there's no movable cursor on the
-  // web version, which keeps every key a pure function of (text) → text.
+  // Keypad editing at a cursor.
+  //
+  // Every key is a pure function of (text, cursor) → {text, cursor}, so a digit typed
+  // five characters back fixes that one digit instead of appending to the end. The
+  // rules are the Android app's, which had a movable cursor from the start; the first
+  // web version dropped it and always typed at the end, which made "I meant 5, not 6"
+  // a matter of deleting everything after the mistake.
   // ---------------------------------------------------------------------------
 
-  function trailingOperand(text) {
-    let l = text.length;
+  const isOp = (c) => OPS.includes(c);
+
+  /** The number the cursor is in (or touching), as [start, end). */
+  function operandBounds(text, cur) {
+    let l = cur;
     while (l > 0 && isNumChar(text[l - 1])) l--;
-    return text.slice(l);
+    let r = cur;
+    while (r < text.length && isNumChar(text[r])) r++;
+    return [l, r];
   }
 
-  /** A bare leading "0" is replaced rather than extended, so "0" then "5" reads "5". */
-  function pressDigit(text, d) {
-    if (trailingOperand(text) === '0') return text.slice(0, -1) + d;
-    return text + d;
-  }
+  const insertAt = (text, cur, ins) => ({ text: text.slice(0, cur) + ins + text.slice(cur), cur: cur + ins.length });
 
   /**
-   * The "00" / "000" keys. ¥1,000 and 15,000 COP are everyday amounts. They can only
-   * ever EXTEND a number already being typed — on an empty operand or a bare zero they
-   * do nothing, because "000" there is noise, not a value.
+   * Apply one key at the cursor.
+   *   digits      insert; a bare "0" at the end of its number is replaced, so "0"→"5" not "05"
+   *   00 / 000    only ever extend a number already begun (the digits LEFT of the cursor);
+   *               on nothing or a bare zero they do nothing — "000" there is noise
+   *   .           one per number; "0." when there's no digit before it
+   *   + − × ÷     an operator beside another replaces it rather than stacking
+   *   %           the phone-calculator convention (see percentAt)
+   *   back        deletes the character before the cursor
    */
-  function pressZeros(text, count) {
-    const op = trailingOperand(text);
-    if (op === '' || parseFloat(op) === 0) return text;
-    return text + '0'.repeat(count);
-  }
-
-  function pressDecimal(text) {
-    const op = trailingOperand(text);
-    if (op.includes('.')) return text;
-    return text + (op === '' ? '0.' : '.');
-  }
-
-  /** A second operator replaces the first rather than stacking ("5+×" → "5×"). */
-  function pressOperator(text, op) {
-    if (!text) return op === '-' ? '-' : text;
-    if (text === '-') return text;
-    if (OPS.includes(text[text.length - 1])) return text.slice(0, -1) + op;
-    return text + op;
-  }
-
-  function pressBackspace(text) {
-    return text.slice(0, -1);
+  function editAt(text, cur, key) {
+    cur = Math.max(0, Math.min(cur == null ? text.length : cur, text.length));
+    if (key === 'AC') return { text: '', cur: 0 };
+    if (key === 'back') {
+      if (cur === 0) return { text, cur };
+      return { text: text.slice(0, cur - 1) + text.slice(cur), cur: cur - 1 };
+    }
+    if (/^\d$/.test(key)) {
+      const [l, r] = operandBounds(text, cur);
+      if (text.slice(l, r) === '0' && cur === r) return { text: text.slice(0, l) + key + text.slice(r), cur: l + 1 };
+      return insertAt(text, cur, key);
+    }
+    if (key === '00' || key === '000') {
+      let l = cur;
+      while (l > 0 && isNumChar(text[l - 1])) l--;
+      const left = text.slice(l, cur);
+      if (left === '' || parseFloat(left) === 0) return { text, cur };
+      return insertAt(text, cur, key);
+    }
+    if (key === '.') {
+      const [l, r] = operandBounds(text, cur);
+      if (text.slice(l, r).includes('.')) return { text, cur };
+      const prev = cur > 0 ? text[cur - 1] : null;
+      return insertAt(text, cur, prev !== null && /\d/.test(prev) ? '.' : '0.');
+    }
+    if (isOp(key)) {
+      if (!text) return key === '-' ? { text: '-', cur: 1 } : { text, cur };
+      if (text === '-') return { text, cur };
+      if (cur === 0) return key === '-' && !isOp(text[0]) ? insertAt(text, 0, '-') : { text, cur };
+      if (isOp(text[cur - 1])) return { text: text.slice(0, cur - 1) + key + text.slice(cur), cur };
+      if (cur < text.length && isOp(text[cur])) return { text: text.slice(0, cur) + key + text.slice(cur + 1), cur: cur + 1 };
+      return insertAt(text, cur, key);
+    }
+    if (key === '%') return percentAt(text, cur);
+    return { text, cur };
   }
 
   /**
-   * Percent, the phone-calculator way:
+   * Percent, the phone-calculator way, on the number at (or just before) the cursor:
    *   "100+8%"  → 108   (8% OF the running total)
    *   "200-25%" → 150
    *   "60×50%"  → 30    (a fraction)
    *   "100%"    → no-op (no base yet; "100 → 1" surprised people and they asked it stop)
-   * The trailing operand is rewritten so the expression on screen matches the maths.
+   * The number is rewritten so the expression on screen matches the maths.
    */
-  function pressPercent(text) {
-    if (!text) return text;
-    let right = text.length;
-    let left = right;
-    while (left > 0 && isNumChar(text[left - 1])) left--;
-    if (left === right) return text; // ends in an operator — nothing to take a percent of
+  function percentAt(text, cur) {
+    if (!text) return { text, cur };
+    let [left, right] = operandBounds(text, cur);
+    if (left === right) {
+      let idx = cur - 1;
+      while (idx >= 0 && !isNumChar(text[idx])) idx--;
+      if (idx < 0) return { text, cur };
+      right = idx + 1;
+      left = idx;
+      while (left > 0 && isNumChar(text[left - 1])) left--;
+    }
     const v = parseFloat(text.slice(left, right));
-    if (!Number.isFinite(v)) return text;
+    if (!Number.isFinite(v)) return { text, cur };
     const opChar = left > 0 ? text[left - 1] : null;
     let newVal;
     if (opChar === '+' || opChar === '-') {
       const leftExpr = text.slice(0, left - 1);
-      if (!leftExpr.trim()) return text;
+      if (!leftExpr.trim()) return { text, cur };
       let base;
-      try { base = evaluate(leftExpr); } catch (_) { return text; }
+      try { base = evaluate(leftExpr); } catch (_) { return { text, cur }; }
       newVal = (v / 100) * base;
     } else if (opChar === '×' || opChar === '÷') {
       newVal = v / 100;
     } else {
-      return text;
+      return { text, cur };
     }
-    return text.slice(0, left) + formatNumberForExpression(newVal);
+    const str = formatNumberForExpression(newVal);
+    return { text: text.slice(0, left) + str + text.slice(right), cur: left + str.length };
+  }
+
+  // End-of-text forms, kept for callers and tests that type at the end.
+  const atEnd = (text, key) => editAt(text, text.length, key).text;
+  const trailingOperand = (text) => text.slice(operandBounds(text, text.length)[0]);
+  const pressDigit = (text, d) => atEnd(text, d);
+  const pressZeros = (text, count) => atEnd(text, count === 2 ? '00' : '000');
+  const pressDecimal = (text) => atEnd(text, '.');
+  const pressOperator = (text, op) => atEnd(text, op);
+  const pressBackspace = (text) => atEnd(text, 'back');
+  const pressPercent = (text) => atEnd(text, '%');
+
+  /**
+   * Where each comma goes when a raw expression is displayed: the set of raw indexes
+   * that get a "," drawn before them. Kept separate from the text so the display can
+   * show "12,000" while a tap on the "2" still maps to raw index 1.
+   */
+  function commaPositions(text) {
+    const out = new Set();
+    let i = 0;
+    while (i < text.length) {
+      if (!isNumChar(text[i])) { i++; continue; }
+      const start = i;
+      while (i < text.length && isNumChar(text[i])) i++;
+      const run = text.slice(start, i);
+      const dot = run.indexOf('.');
+      const intLen = dot < 0 ? run.length : dot;
+      for (let k = 1; k < intLen; k++) if ((intLen - k) % 3 === 0) out.add(start + k);
+    }
+    return out;
   }
 
   /**
@@ -312,6 +376,30 @@
       s = code + ' ' + fmt(v, 2);
     }
     return s.replace(/^(-?)([A-Za-z]+)(\d)/, '$1$2 $3');
+  }
+
+  /** The symbol a currency is written with in en-US: "$", "¥", "€", or its code ("COP"). */
+  function currencySymbol(code) {
+    try {
+      const part = new Intl.NumberFormat('en-US', { style: 'currency', currency: code })
+        .formatToParts(1).find((x) => x.type === 'currency');
+      return part ? part.value : code;
+    } catch (_) {
+      return code;
+    }
+  }
+
+  /**
+   * One rate as people say it: "¥100 = $0.611", "$1 = ¥163.70", "COP 10,000 = $3.119".
+   * Base from quoteFor(), so the yen reads per 100 rather than as 0.0061 per yen.
+   */
+  function quoteText(from, to, rate) {
+    const q = quoteFor(rate);
+    const amt = (code, n) => {
+      const sym = currencySymbol(code);
+      return /[A-Za-z]$/.test(sym) ? `${sym} ${n}` : `${sym}${n}`;
+    };
+    return `${amt(from, q.baseUnits.toLocaleString('en-US'))} = ${amt(to, formatQuoteValue(q))}`;
   }
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -552,10 +640,11 @@
   const Core = {
     CURRENCIES, CODES, QUICK_PAIRS, CalcError,
     evaluate, evaluateLoose, trimTrailingOps, trailingOperand,
+    editAt, percentAt, commaPositions,
     pressDigit, pressZeros, pressDecimal, pressOperator, pressBackspace, pressPercent,
     formatNumberForExpression, displayExpression,
     digitsFor, formatRateValue, formatRateDelta, quoteFor, formatQuoteValue,
-    formatPlainNumber, formatAmount, shortDate, MONTHS,
+    formatPlainNumber, formatAmount, shortDate, MONTHS, currencySymbol, quoteText,
     parseJsDelivr, parseFrankfurter, rateBetween,
     RANGES, EARLIEST, todayIso, minusDaysIso, startDateFor,
     parseTimeSeries, parseTrm, alignAsOf, crossSeries, invertSeries, downsample,

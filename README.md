@@ -14,14 +14,15 @@ screen, rebuilt from the Android app (`../Currency Converter Calculator`, Kotlin
 
 ## What's in it
 
-- **Currency** — calculator that converts while you compute; quick pairs USD⇄JPY and
-  USD⇄COP, any of 32 currencies behind the title; rate line quoted on a readable base
-  (100 JPY, 10,000 COP) with today's move and the rate's date; pins with tap-two-to-compare
+- **Currency** — calculator that converts while you compute; a JPY → USD | USD → JPY switch,
+  any of 32 currencies behind the title; the rate in both directions at once
+  (`¥100 = $0.634 · $1 = ¥157.63`) with today's move and the rate's date; tap anywhere in
+  the number you're typing to put the cursor there and fix one digit; pins with tap-two-to-compare
   (difference in both currencies + ratio), hold a pin to load it back; history of every `=`.
 - **History chart** — tap the rate line. 1W / 1M / 1Y / 5Y / Max, y-axis values, dated
   x-axis, drag to read any day, low/high/then/now.
 - **Calculator** — adding-machine tape: `=` stacks the line and clears; tap a line to fix it
-  in place.
+  in place; the same tap-to-place cursor for editing mid-number.
 - **Units** — length, mass, temperature, volume.
 
 ## Rates
