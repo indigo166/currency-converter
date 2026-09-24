@@ -15,10 +15,17 @@
 (function (root) {
   'use strict';
 
-  const VERSION = '1.1.1';
+  const VERSION = '1.1.2';
 
   /** Newest first. Notes are written for the person using the app, not for the code. */
   const RELEASES = [
+    {
+      version: '1.1.2',
+      date: '2026-09-23',
+      notes: [
+        'Fixed: the "Updated to v…" notice could be skipped when the app reloaded itself to finish an update.',
+      ],
+    },
     {
       version: '1.1.1',
       date: '2026-09-23',

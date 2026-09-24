@@ -996,6 +996,15 @@
   // rates cached — that's an update too, not a first launch.
   const seen = store.get('seenVersion', null);
   const updated = seen ? seen !== VERSION : store.get('rates', null) != null;
-  if (updated) setTimeout(() => toast(`Updated to v${VERSION} — tap ⓘ for what's new`, 4000), 600);
-  store.set('seenVersion', VERSION);
+  // Marked as seen only once the notice has been on screen for its full time. An update
+  // reloads the page once when the new service worker takes over; recording it at start-up
+  // meant that reload swallowed the notice and the next load thought it had been shown.
+  if (updated) {
+    setTimeout(() => {
+      toast(`Updated to v${VERSION} — tap ⓘ for what's new`, 4000);
+      setTimeout(() => store.set('seenVersion', VERSION), 4000);
+    }, 800);
+  } else {
+    store.set('seenVersion', VERSION);
+  }
 })();
