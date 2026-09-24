@@ -10,7 +10,7 @@
   'use strict';
 
   const C = window.Core;
-  const VERSION = '1.0.0';
+  const VERSION = '1.0.1';
 
   // ------------------------------------------------------------------------
   // Storage — everything lives on the phone. Home-screen web apps on iOS keep their
@@ -344,7 +344,7 @@
     const chips = S.pins.map((p) => `
       <div class="pinchip ${S.selected.includes(p.id) ? 'sel' : ''}" data-action="pin-toggle" data-long="pin-load" data-id="${p.id}">
         <div>
-          <div class="p-expr">${esc(C.displayExpression(p.expression))}</div>
+          ${/[+×÷]|.-/.test(p.expression) ? `<div class="p-expr">${esc(C.displayExpression(p.expression))}</div>` : ''}
           <div class="p-amt">${esc(C.formatAmount(p.amount, p.from))}</div>
           ${p.converted != null ? `<div class="p-conv">${esc(C.formatAmount(p.converted, p.to))}</div>` : ''}
         </div>
@@ -458,10 +458,54 @@
       </div>`;
   }
 
+  /**
+   * Keys fill the height the screen has left. They were a fixed ~62px, so every iPhone
+   * taller than the smallest one showed the spare height as dead space above the pad.
+   *
+   * Measured rather than guessed: everything above the pad that must stay visible (chips,
+   * rate line, pins and the comparison, the tape's header) is taken at its real height,
+   * the part that can flex (the display, the tape) is held at a floor, and the keys get
+   * the rest — clamped so they never go below a comfortable tap target or grow absurd on
+   * an iPad. Re-run on every render because pinning or un-pinning changes the budget.
+   */
+  const KEY_MIN = 52;
+  const KEY_MAX = 88;
+  const DISPLAY_FLOOR = 128; // expression + currency amount + conversion line
+  const TAPE_FLOOR = 150; // about three tape lines
+  const DISPLAY_COMPACT = 104; // the same three lines at the smaller type below
+  const KEY_COMFORT = 68; // below this, shrink the display instead of the keys
+
+  function sizePad() {
+    const pad = $('#pad');
+    if (pad.hidden) return;
+    const app = $('#app');
+    const avail = app.clientHeight - parseFloat(getComputedStyle(app).paddingTop)
+      - $('#topbar').offsetHeight - $('#tabs').offsetHeight;
+    let need = 0;
+    for (const el of $('#view').children) {
+      const cs = getComputedStyle(el);
+      const margins = parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
+      if (el.id === 'tape') need += TAPE_FLOOR;
+      else if (el.classList.contains('display') && !el.classList.contains('calc')) need += DISPLAY_FLOOR;
+      else need += el.offsetHeight + margins;
+    }
+    const pcs = getComputedStyle(pad);
+    const chrome = parseFloat(pcs.paddingTop) + parseFloat(pcs.paddingBottom) + 4 * parseFloat(pcs.rowGap || 8);
+    const hasDisplay = !!document.querySelector('#view > .display:not(.calc)');
+    let keyH = Math.floor((avail - need - chrome) / 5);
+    // Short on room (pins and a comparison open)? The display gives up size before the
+    // keys do — a smaller readout is still readable; a small key is a missed tap.
+    const compact = hasDisplay && keyH < KEY_COMFORT;
+    if (compact) keyH += Math.floor((DISPLAY_FLOOR - DISPLAY_COMPACT) / 5);
+    app.classList.toggle('compact', compact);
+    const clamped = Math.max(KEY_MIN, Math.min(KEY_MAX, keyH));
+    document.documentElement.style.setProperty('--key-h', clamped + 'px');
+  }
+
   /** Shrink a line's font until it fits its box, so long amounts never clip. */
   function fitText() {
     document.querySelectorAll('[data-fit]').forEach((el) => {
-      const max = parseFloat(el.dataset.fit);
+      const max = parseFloat(el.dataset.fit) * ($('#app').classList.contains('compact') ? 0.75 : 1);
       let size = max;
       el.style.fontSize = size + 'px';
       const box = el.parentElement.clientWidth - 12;
@@ -490,6 +534,7 @@
       if (S.scrollTapeToEnd) { t.scrollTop = t.scrollHeight; S.scrollTapeToEnd = false; }
       else t.scrollTop = tapeTop;
     }
+    sizePad();
     fitText();
   }
 
@@ -518,6 +563,8 @@
     renderView();
     renderPad();
     renderTabs();
+    sizePad();
+    fitText();
     if (S.sheet) renderSheet();
   }
 
@@ -905,7 +952,7 @@
     if (scrubbing) { scrubbing = false; endScrub(); }
   }));
 
-  window.addEventListener('resize', () => { fitText(); if (S.chart && S.chart.data) drawPlot(); });
+  window.addEventListener('resize', () => { sizePad(); fitText(); if (S.chart && S.chart.data) drawPlot(); });
 
   // Refresh when the app comes back to the foreground with a stale table.
   document.addEventListener('visibilitychange', () => {
@@ -915,6 +962,14 @@
   });
 
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    // When an update's worker takes over, reload once so the new version shows now rather
+    // than on the next launch. Only for updates — a first install has no prior controller.
+    if (navigator.serviceWorker.controller) {
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!reloaded) { reloaded = true; location.reload(); }
+      });
+    }
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline shell unavailable */ });
   }
 

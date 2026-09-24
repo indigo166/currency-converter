@@ -1,13 +1,12 @@
 /*
- * Offline shell. The app's own files are served from cache and refreshed in the
- * background (stale-while-revalidate), so it opens instantly with no signal and picks
- * up a new version on the next launch. Rate and history requests go straight to the
+ * Offline shell. The app's own files come from the network when there is one (so an
+ * update shows on the next open) and from the cache when there isn't. Rate and history requests go straight to the
  * network — the page keeps its own last-known rates, and old history isn't worth
  * serving as if it were current.
  *
  * Bump CACHE on every release so old shells are dropped.
  */
-const CACHE = 'cc-v1.0.0';
+const CACHE = 'cc-v1.0.1';
 const SHELL = [
   './', 'index.html', 'styles.css', 'core.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
@@ -28,13 +27,21 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
-  e.respondWith(
-    caches.open(CACHE).then(async (cache) => {
+  // Network first, cache as the fallback. Was stale-while-revalidate, which meant every
+  // update took two launches to appear — fine for a finished app, wrong for one still
+  // being tuned. The 3 s timeout keeps a bad signal from stalling the launch.
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    try {
+      const res = await Promise.race([
+        fetch(e.request),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+      ]);
+      if (res.ok) cache.put(e.request, res.clone());
+      return res;
+    } catch (_) {
       const cached = await cache.match(e.request, { ignoreSearch: true });
-      const network = fetch(e.request)
-        .then((res) => { if (res.ok) cache.put(e.request, res.clone()); return res; })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
+      return cached || Response.error();
+    }
+  })());
 });

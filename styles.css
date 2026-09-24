@@ -22,7 +22,9 @@
   --key-ac: #8f1d1a;
   --key-eq: #7fd0ff;
   --radius: 14px;
-  --key-h: clamp(46px, 7.4dvh, 62px);
+  /* Set at runtime by sizePad() in app.js to fill whatever height the screen has left;
+     this is only the value before the first measurement. */
+  --key-h: 72px;
   color-scheme: dark;
 }
 
@@ -157,7 +159,7 @@ svg { display: block; }
   display: flex; align-items: center; justify-content: space-between;
   font-size: 13px; color: var(--primary); padding: 2px 4px;
 }
-.display.calc { flex: none; min-height: 96px; }
+.display.calc { flex: none; min-height: 80px; }
 .display.calc .expr { color: var(--text); font-size: 38px; font-weight: 300; }
 .display.calc .preview { color: var(--muted); font-size: 18px; min-height: 24px; }
 
@@ -177,11 +179,12 @@ svg { display: block; }
 .swap-mid svg { width: 22px; height: 22px; }
 
 /* ---- keypad --------------------------------------------------------------- */
-#pad { padding: 6px 10px 6px; display: grid; gap: 6px; }
-.krow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+#pad { padding: 6px 10px 6px; display: grid; gap: 8px; }
+.krow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .krow.five { grid-template-columns: repeat(5, 1fr); }
 .key {
-  height: var(--key-h); border-radius: 18px; font-size: 24px;
+  height: var(--key-h); border-radius: calc(var(--key-h) * 0.3);
+  font-size: calc(var(--key-h) * 0.4);
   background: var(--key-digit); display: grid; place-items: center;
   transition: filter 60ms;
 }
@@ -189,8 +192,8 @@ svg { display: block; }
 .key.op { background: var(--key-op); }
 .key.ac { background: var(--key-ac); }
 .key.eq { background: var(--key-eq); color: var(--on-primary); font-weight: 600; }
-.key.small { font-size: 20px; }
-.key svg { width: 26px; height: 26px; }
+.key.small { font-size: calc(var(--key-h) * 0.31); }
+.key svg { width: calc(var(--key-h) * 0.4); height: calc(var(--key-h) * 0.4); }
 
 /* ---- tab bar ------------------------------------------------------------------ */
 #tabs {
@@ -265,3 +268,9 @@ svg { display: block; }
 .chart-top { display: flex; align-items: center; min-height: 52px; padding: 0 6px; }
 /* The four quick pairs share the width equally so none is ever half off-screen. */
 .chips.quick .chip { flex: 1 1 0; min-width: 0; padding: 7px 2px; text-align: center; font-size: 13px; }
+
+/* Tight-room display: pins + a comparison open. Set by sizePad() so the keys keep their size. */
+#app.compact .expr { font-size: 19px; }
+#app.compact .conv { font-size: 16px; }
+#app.compact .conv-row { min-height: 30px; }
+#app.compact .display { padding-top: 0; padding-bottom: 2px; }
